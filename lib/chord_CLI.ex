@@ -10,5 +10,6 @@ defmodule Chord_CLI do
     Logger.debug(inspect(num_nodes) <> inspect(num_req))
 
     # TODO: Call start here (num_nodes, num_req)
+    ChordP2P.start(:normal, [num_nodes, num_req])
   end
 end
