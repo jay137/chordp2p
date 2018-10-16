@@ -1,18 +1,15 @@
-defmodule CP2P do
+defmodule ChordP2P do
+  use Application
+
+  require Logger
+
   @moduledoc """
-  Documentation for CP2P.
+  Documentation for GS.
   """
 
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> CP2P.hello()
-      :world
-
-  """
-  def hello do
-    :world
+  def start(type, args) do
+    # Logger.debug("Inside start " <> inspect(_MODULE_) <> " " <> "with args: " <> inspect(args) <> "and type: " <> inspect(type))
+    CP2P.Supervisor.start_link(args)
+    GenServer.call(CP2P.Master, {:begin, args}, :infinity)
   end
 end

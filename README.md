@@ -15,13 +15,24 @@ def deps do
 end
 ```
 
-Team Members
---
+###Team Members
+
+Mukul Chand Yadav
+UFID: 7585 9623
+
+Jay Patel
+UFID: 4145 1618
+
+---
+
 What is working?
---
+
+---
+
 Largest network managed
+
+---
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at [https://hexdocs.pm/chordp2p](https://hexdocs.pm/chordp2p).
-
