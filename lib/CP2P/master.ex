@@ -13,9 +13,17 @@ defmodule CP2P.Master do
   end
 
   @impl true
-  def handle_call({:begin, args}, _from, state) do
-    Logger.debug(inspect(args))
-    # Logger.debug("Numnodes:" <> inspect(head) <> "  " <> "NumReq:" <> inspect(tail))
+  def handle_call({:begin, %{numNodes: num_nodes , numReq: num_req}}, _from, state) do
+    Logger.debug("#{inspect(__MODULE__)} number of nodes: #{inspect(num_nodes)}, number of  Requests:#{inspect(num_req)}")
+
+    for i <- 1..num_nodes do
+
+      {:ok, node_pid} = DynamicSupervisor.start_child(CP2P.NodeSupervisor, {CP2P.Node,  num_req})
+      #Logger.debug("#{inspect(__MODULE__)} Starting node: #{inspect(i)}, pid:#{inspect(node_pid)}")
+      Registry.register(CP2P.Registry.ProcReg, node_pid, i) #TODO: Create ring node id by hashing function
+
+    end
+
     {:reply, :ok, state}
   end
 
