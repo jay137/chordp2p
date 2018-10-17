@@ -6,7 +6,7 @@ defmodule CP2P.Node do
 
   def start_link(opts) do
     Logger.debug("#{inspect(__MODULE__)} Inside start_link  with options: #{inspect(opts)}")
-    GenServer.start_link(__MODULE__, :ok, opts)
+    GenServer.start_link(__MODULE__, opts)
   end
 
   @impl true
