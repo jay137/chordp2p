@@ -95,7 +95,7 @@ defmodule CP2P.Node do
 
     schedule_work(:check_predecessor, 2 * 1000)
 
-    state = {state | predecessor: predecessor}
+    state = %{state | predecessor: predecessor}
   end
 
   # Server APIs
