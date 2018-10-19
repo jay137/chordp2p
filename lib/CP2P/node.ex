@@ -5,11 +5,65 @@ defmodule CP2P.Node do
 
   ### Client APIs
 
-  ## create a new Chord ring.
-  def create() do
-    predecessor = nil
-    successor = self
+
+  # Server APIs
+  def start_link(opts) do
+    ##Logger.debug("#{inspect(__MODULE__)} Inside start_link with options: #{inspect(opts)}")
+    GenServer.start_link(__MODULE__, opts)
   end
+
+  @impl true
+  def init(opts) do
+    [num_req | t] = opts
+    [m | t] = t
+    #Logger.debug("#{inspect(__MODULE__)} Inside init. Num requests: #{inspect(num_req)} and m: #{inspect(m)}")
+
+    total_nodes = trunc(:math.pow(2, m))
+
+    {hashed_hex_pid, _} =
+      :crypto.hash(:sha512, :erlang.pid_to_list(self)) |> Base.encode16() |> Integer.parse(16)
+
+    node_id = hashed_hex_pid
+              |> rem(total_nodes)
+
+    node_id = lookup_node_id(node_id, total_nodes)
+
+    #Logger.debug("Hashed value: #{inspect(hashed_hex_pid)} and node id:#{inspect(node_id)}")
+
+    schedule_work :send_msg, 1# * 1000)
+
+    {:ok,
+      %CP2P.Node_info{
+        node_id: node_id,
+        successor: %{},
+        predecessor: %{},
+        node_pid: self(),
+        ft: [],
+        m: m,
+        req_left: num_req
+      }
+    }
+  end
+
+  @impl true
+  def handle_call(:get, _from, state) do
+    {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call(:process_msg, _from, state) do
+    #Logger.debug("#{inspect __MODULE__} Received :process_msg call on node - #{inspect state.node_id}")
+    # TODO: Lookup required node in finger table
+
+    {:reply, :ok, state}
+  end
+
+
+  ## create a new Chord ring.
+  #  def create() do
+  #    predecessor = nil
+  #    successor = self()
+  #  end
 
   #
 
@@ -35,36 +89,6 @@ defmodule CP2P.Node do
   #    {:reply, closest_preceding_node_info, state}
   #  end
 
-  defp find_closest_preceding_node_from_finger_table(for_node_id, this_node_info) do
-    finger = this_node_info[:ft]
-    this_node_id = this_node_info[:node_id]
-    m = this_node_info[:m]
-
-    for i <- m..1 do
-      if belongs_to_range?(this_node_id, for_node_id, finger[i]) do
-        finger[i]
-      end
-    end
-
-    this_node_info
-  end
-
-  def lookup_node_id(node_id) do
-    IO.puts("Aa su la")
-    IO.puts(node_id)
-    node_id
-  end
-
-  def lookup_node_id(this_node_id, total_nodes) do
-    node_id_lookup = Registry.lookup(Registry.ProcReg, this_node_id)
-
-    if node_id_lookup != [] do
-      this_node_id = Enum.random(1..(total_nodes - 1))
-      lookup_node_id(this_node_id, total_nodes)
-    else
-      lookup_node_id(this_node_id)
-    end
-  end
 
   ### Join a Chord ring containing node `existing_node_info`
   def handle_cast({:join, existing_node_info}, state) do
@@ -75,65 +99,31 @@ defmodule CP2P.Node do
     state = %{state | successor: successor}
   end
 
-  # Server APIs
-  def start_link(opts) do
-    Logger.debug("#{inspect(__MODULE__)} Inside start_link with options: #{inspect(opts)}")
-    GenServer.start_link(__MODULE__, opts)
-  end
-
-  @impl true
-  def init([num_req, m]) do
-    Logger.debug("#{inspect(__MODULE__)} Inside init num requests: #{inspect(num_req)}")
-    schedule_work(:send_msg, 1 * 1000)
-
-    {hashed_hex_pid, _} =
-      :crypto.hash(:sha512, :erlang.pid_to_list(self)) |> Base.encode16() |> Integer.parse(16)
-
-    node_id = hashed_hex_pid |> rem(trunc(:math.pow(2, m)))
-
-    Logger.debug("Hashed value: " <> inspect(hashed_hex_pid))
-
-    {:ok,
-     %CP2P.Node_info{
-       node_id: node_id,
-       successor: %{},
-       predecessor: %{},
-       node_pid: self(),
-       ft: [],
-       req_left: num_req,
-       m: m
-     }}
-  end
-
-  @impl true
-  def handle_call(:get, _from, state) do
-    {:reply, state, state}
-  end
-
-  @impl true
-  def handle_call(:process_msg, _from, state) do
-    # TODO: Lookup required node in finger table
-    {:reply, :ok, state}
-  end
 
   @impl true
   def handle_info(:send_msg, state) do
+    Logger.debug("#{inspect __MODULE__} Send message called for #{inspect state.node_id} with state: #{inspect state}")
     num_req = Map.get(state, :req_left)
+    send_msg_timeout = 1#1 * 1000
 
     if num_req > 0 do
-      # TODO: Choose random node
-      random_node_id = 1
+      random_node_id = :rand.uniform (trunc(:math.pow(2, state.m)) - 1)
+      num_keys = Registry.count(CP2P.Registry.ProcReg)
+      Logger.debug("#{inspect __MODULE__} keys: #{inspect num_keys}")
 
-      GenServer.call(random_node_id, {:process_msg})
+      random_node_info = Registry.lookup(CP2P.Registry.ProcReg, random_node_id)
+      #Logger.debug("#{inspect __MODULE__} Calling random node: #{inspect random_node_info}")
+
+      GenServer.call(random_node_info.node_pid, {:process_msg})
 
       # Decrement counter for this node
       new_state = %{state | req_left: num_req - 1}
-      schedule_work(:send_msg, 1 * 1000)
+      schedule_work(:send_msg, send_msg_timeout)
       {:noreply, new_state}
     end
   end
 
-  ## called periodically. verifies this node's immediate
+  ## called periodically. Verifies this node's immediate
   ## successor, and tells the successor about n.
   def handle_info(:stabilize, state) do
     successor = state[:successor]
@@ -222,63 +212,35 @@ defmodule CP2P.Node do
     state = %{state | predecessor: predecessor}
   end
 
-  #
+  defp find_closest_preceding_node_from_finger_table(for_node_id, this_node_info) do
+    finger = this_node_info[:ft]
+    this_node_id = this_node_info[:node_id]
+    m = this_node_info[:m]
 
-  @impl true
-  def init(num_req) do
-    # TODO: Pass num_nodes from the master
-    Logger.debug("#{inspect(__MODULE__)} Inside init num requests: #{inspect(num_req)}")
-    schedule_work(:send_msg, 1 * 1000)
+    for i <- m..1 do
+      if belongs_to_range?(this_node_id, for_node_id, finger[i]) do
+        finger[i]
+      end
+    end
 
-    m = 8
-    total_nodes = trunc(:math.pow(2, m))
-
-    {hashed_hex_pid, _} =
-      :crypto.hash(:sha512, :erlang.pid_to_list(self)) |> Base.encode16() |> Integer.parse(16)
-
-    node_id = hashed_hex_pid |> rem(total_nodes)
-
-    node_id = lookup_node_id(node_id, total_nodes)
-
-    Logger.debug("Hashed value: " <> inspect(hashed_hex_pid))
-
-    {:ok,
-     %CP2P.Node_info{
-       node_id: node_id,
-       successor: %{},
-       predecessor: %{},
-       node_pid: self(),
-       ft: [],
-       req_left: num_req
-     }}
+    this_node_info
   end
 
-  @impl true
-  def handle_call(:process_msg, _from, state) do
-    # TODO: Lookup required node in finger table
-    {:reply, :ok, state}
-  end
+  defp lookup_node_id(this_node_id, total_nodes) do
+    node_id_lookup = Registry.lookup(CP2P.Registry.ProcReg, this_node_id)
 
-  @impl true
-  def handle_info(:send_msg, state) do
-    num_req = Map.get(state, :req_left)
-
-    if num_req > 0 do
-      # TODO: Choose random node
-      random_node_id = 1
-
-      GenServer.call(random_node_id, {:process_msg})
-
-      # Decrement counter for this node
-      new_state = %{state | req_left: num_req - 1}
-      schedule_work(:send_msg, 1 * 1000)
-      {:noreply, new_state}
+    if node_id_lookup != [] do
+      this_node_id = Enum.random(1..(total_nodes - 1))
+      lookup_node_id(this_node_id, total_nodes)
+    else
+      this_node_id
     end
   end
 
   defp schedule_work(job_atom_id, time_interval) do
-    # In 1 sec
-    Process.send_after(self(), job_atom_id, time_interval)
+
+    message_timer = Process.send_after(self(), job_atom_id, time_interval)
+    Logger.debug("Message timer #{inspect job_atom_id} for self: #{inspect Process.read_timer(message_timer)}")
   end
 
   defp belongs_to_range?(range1, range2, num) do
@@ -291,4 +253,5 @@ defmodule CP2P.Node do
       false
     end
   end
+
 end
