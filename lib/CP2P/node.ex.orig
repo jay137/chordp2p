@@ -16,16 +16,14 @@ defmodule CP2P.Node do
   ## ask node n to find the successor of id
   def handle_call({:find_successor, for_node_id}, _from, state) do
     successor = state[:successor]
+    successor_for_node_id = if (belongs_to_range?(state[:node_id], successor[:node_id] + 1, for_node_id)) do
+      successor
+    else
+      #TODO: Change to local function call
+      closest_prec_node_info = find_closest_preceding_node_from_finger_table for_node_id, state
+      GenServer.call(closest_prec_node_info[:node_pid], {:find_successor, for_node_id})
 
-    successor_for_node_id =
-      if belongs_to_range?(state[:node_id], successor[:node_id] + 1, for_node_id) do
-        successor
-      else
-        # TODO: Change to local function call
-        closest_prec_node_info = find_closest_preceding_node_from_finger_table(for_node_id, state)
-        GenServer.call(closest_prec_node_info[:node_pid], {:find_successor, for_node_id})
-      end
-
+    end
     {:reply, successor_for_node_id, state}
   end
 
@@ -39,31 +37,12 @@ defmodule CP2P.Node do
     finger = this_node_info[:ft]
     this_node_id = this_node_info[:node_id]
     m = this_node_info[:m]
-
     for i <- m..1 do
-      if belongs_to_range?(this_node_id, for_node_id, finger[i]) do
+      if (belongs_to_range?(this_node_id, for_node_id, finger[i])) do
         finger[i]
       end
     end
-
     this_node_info
-  end
-
-  def lookup_node_id(node_id) do
-    IO.puts("Aa su la")
-    IO.puts(node_id)
-    node_id
-  end
-
-  def lookup_node_id(this_node_id, total_nodes) do
-    node_id_lookup = Registry.lookup(Registry.ProcReg, this_node_id)
-
-    if node_id_lookup != [] do
-      this_node_id = Enum.random(1..(total_nodes - 1))
-      lookup_node_id(this_node_id, total_nodes)
-    else
-      lookup_node_id(this_node_id)
-    end
   end
 
   ### Join a Chord ring containing node `existing_node_info`
@@ -75,6 +54,8 @@ defmodule CP2P.Node do
     state = %{state | successor: successor}
   end
 
+
+
   # Server APIs
   def start_link(opts) do
     Logger.debug("#{inspect(__MODULE__)} Inside start_link with options: #{inspect(opts)}")
@@ -83,6 +64,7 @@ defmodule CP2P.Node do
 
   @impl true
   def init([num_req, m]) do
+
     Logger.debug("#{inspect(__MODULE__)} Inside init num requests: #{inspect(num_req)}")
     schedule_work(:send_msg, 1 * 1000)
 
@@ -133,6 +115,23 @@ defmodule CP2P.Node do
     end
   end
 
+  def lookup_node_id(node_id) do
+    IO.puts("Aa su la")
+    IO.puts(node_id)
+    node_id
+  end
+
+  def lookup_node_id(this_node_id, total_nodes) do
+    node_id_lookup = Registry.lookup(Registry.ProcReg, this_node_id)
+
+    if node_id_lookup != [] do
+      this_node_id = Enum.random(1..(total_nodes - 1))
+      lookup_node_id(this_node_id, total_nodes)
+    else
+      lookup_node_id(this_node_id)
+    end
+  end
+
   ## called periodically. verifies this node's immediate
   ## successor, and tells the successor about n.
   def handle_info(:stabilize, state) do
@@ -150,6 +149,8 @@ defmodule CP2P.Node do
 
     state = %{state | successor: successor}
   end
+
+
 
   ## called periodically. refreshes finger table entries.
   ## next stores the index of the next finger to fix.
@@ -202,27 +203,12 @@ defmodule CP2P.Node do
     state = %{state | predecessor: predecessor}
   end
 
-  ## n0 thinks it might be our predecessor, so it notifies this node
-  def handle_info({:notify, predecessor_node_info}, state) do
-    predecessor = state[:predecessor]
-    this_node_id = state[:node_id]
-
-    predecessor =
-      if predecessor == nil or
-           belongs_to_range?(
-             predecessor_node_info[:node_id],
-             this_node_id,
-             predecessor[:node_id]
-           ) do
-        predecessor_node_info
-      else
-        predecessor
-      end
-
-    state = %{state | predecessor: predecessor}
+<<<<<<< HEAD
+  # Server APIs
+  def start_link(opts) do
+    Logger.debug("#{inspect(__MODULE__)} Inside start_link with options: #{inspect(opts)}")
+    GenServer.start_link(__MODULE__, opts)
   end
-
-  #
 
   @impl true
   def init(num_req) do
@@ -273,8 +259,26 @@ defmodule CP2P.Node do
       new_state = %{state | req_left: num_req - 1}
       schedule_work(:send_msg, 1 * 1000)
       {:noreply, new_state}
+=======
+  ## n0 thinks it might be our predecessor, so it notifies this node
+  def handle_info({:notify, predecessor_node_info}, state) do
+    predecessor = state[:predecessor]
+    this_node_id = state[:node_id]
+    predecessor = if (
+                       predecessor == nil or belongs_to_range?(
+                         predecessor_node_info[:node_id],
+                         this_node_id,
+                         predecessor[:node_id]
+                       )) do
+      predecessor_node_info
+    else
+      predecessor
+>>>>>>> 0d7b4f9a6a2285c2641d0c0cd7615882b10c5362
     end
+    state = %{state | predecessor: predecessor}
   end
+  #
+
 
   defp schedule_work(job_atom_id, time_interval) do
     # In 1 sec
