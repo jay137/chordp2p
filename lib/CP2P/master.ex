@@ -20,7 +20,49 @@ defmodule CP2P.Master do
 
     spawn_nodes(1, num_nodes, first_node_info, num_req)
 
-    {:reply, :ok, state}
+    wait_for_worker_nodes()
+
+    node_id_list = Registry.keys(CP2P.Registry.ProcReg, self())
+    node_id_to_pid_map = Enum.map(
+                           node_id_list,
+                           fn node_id ->
+                             node_info = Registry.lookup(CP2P.Registry.ProcReg, node_id)
+                           end
+                         )
+                         |> Enum.group_by(&(&1.node_id), &(&1.node_pid))
+
+    # for each  node
+    for node_id <- node_id_list do
+
+      node_info = Registry.lookup(CP2P.Registry.ProcReg, node_id)
+
+      other_node_id_to_pid_map = Map.delete(node_id_to_pid_map, node_id)
+
+      other_node_pid_list = Map.values(other_node_id_to_pid_map)
+
+      # Set other node pid list
+      GenServer.call(node_info.node_pid, {:set_other_node_pid_list, other_node_pid_list})
+
+      # Start messaging
+      GenServer.call(node_info.node_pid, :send_msg)
+
+    end
+
+
+
+
+    #TODO: Return average number of hops for all nodes
+    avg_lookup_hops = 100
+    {:reply, avg_lookup_hops, state}
+  end
+
+  defp wait_for_worker_nodes() do
+    Process.sleep(3 * 1000) #3 second
+    num_working_nodes = Registry.count(CP2P.Registry.ProcPresenceStamp)
+    Logger.debug("#{inspect __MODULE__} Nodes: #{inspect num_working_nodes}")
+    if(num_working_nodes > 0) do
+      wait_for_worker_nodes()
+    end
   end
 
   defp spawn_nodes(i, num_nodes, first_node_info, num_req) do
@@ -34,7 +76,7 @@ defmodule CP2P.Master do
 
     #Logger.debug("#{inspect(__MODULE__)} First node_info:#{inspect(first_node_info)} for i:#{inspect i}")
     if(i > 1)do
-      GenServer.cast(node_info.node_pid, {:join, first_node_info.node_pid})
+      GenServer.cast(node_info.node_pid, {:join, first_node_info})
     end
 
     if(i <= num_nodes) do

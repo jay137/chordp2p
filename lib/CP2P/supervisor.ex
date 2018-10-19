@@ -12,6 +12,7 @@ defmodule CP2P.Supervisor do
 
     children = [
       {Registry, keys: :unique, name: CP2P.Registry.ProcReg},
+      {Registry, keys: :unique, name: CP2P.Registry.ProcPresenceStamp},
       # {CP2P.Beacon, name: CP2P.Beacon},
       {CP2P.Master, name: CP2P.Master, args: args},
       {DynamicSupervisor, name: CP2P.NodeSupervisor, strategy: :one_for_one}
