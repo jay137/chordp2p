@@ -21,6 +21,23 @@ defmodule CP2P.Node do
 
   #
 
+  def lookup_node_id(node_id) do
+    IO.puts("Aa su la")
+    IO.puts(node_id)
+    node_id
+  end
+
+  def lookup_node_id(this_node_id, total_nodes) do
+    node_id_lookup = Registry.lookup(Registry.ProcReg, this_node_id)
+
+    if node_id_lookup != [] do
+      this_node_id = Enum.random(1..(total_nodes - 1))
+      lookup_node_id(this_node_id, total_nodes)
+    else
+      lookup_node_id(this_node_id)
+    end
+  end
+
   ## called periodically. verifies this node's immediate
   ## successor, and tells the successor about n.
   def handle_info(:stabilize, state) do
@@ -111,11 +128,14 @@ defmodule CP2P.Node do
     schedule_work(:send_msg, 1 * 1000)
 
     m = 8
+    total_nodes = trunc(:math.pow(2, m))
 
     {hashed_hex_pid, _} =
       :crypto.hash(:sha512, :erlang.pid_to_list(self)) |> Base.encode16() |> Integer.parse(16)
 
-    node_id = hashed_hex_pid |> rem(trunc(:math.pow(2, m)))
+    node_id = hashed_hex_pid |> rem(total_nodes)
+
+    node_id = lookup_node_id(node_id, total_nodes)
 
     Logger.debug("Hashed value: " <> inspect(hashed_hex_pid))
 
