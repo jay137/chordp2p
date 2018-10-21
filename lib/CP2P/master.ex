@@ -98,12 +98,12 @@ defmodule CP2P.Master do
     # ##Logger.debug("#{inspect(__MODULE__)} Starting node: #{inspect(i)}, node_info:#{inspect(node_info)}")
     Registry.register(CP2P.Registry.ProcReg, node_info.node_id, node_info)
 
-    # ##Logger.debug("#{inspect(__MODULE__)} First node_info:#{inspect(first_node_info)} for i:#{inspect i}")
-    #    if(i == 1) do
-    #      GenServer.call(node_info.node_pid, :create)
-    #    else
-    #      GenServer.cast(node_info.node_pid, {:join, first_node_info})
-    #    end
+    ##Logger.debug("#{inspect(__MODULE__)} First node_info:#{inspect(first_node_info)} for i:#{inspect i}")
+    if(i == 1) do
+      GenServer.call(node_info.node_pid, :create)
+    else
+      GenServer.cast(node_info.node_pid, {:join, first_node_info})
+    end
 
     ## Logger.debug("***")
 
@@ -121,8 +121,4 @@ defmodule CP2P.Master do
     end
   end
 
-  # @impl true
-  # def handle_cast({:push, item}, state) do
-  #   {:noreply, [item | state]}
-  # end
 end

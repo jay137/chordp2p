@@ -1,5 +1,5 @@
 defmodule CP2P.Node do
-  # Logger
+
   require Logger
 
   use GenServer
@@ -71,7 +71,7 @@ defmodule CP2P.Node do
   ## ask node n to find the successor of id
   def handle_call({:find_successor, for_node_id}, _from, state) do
     ## # Logger.debug("#{inspect(__MODULE__)} :find_successor for node: #{inspect(for_node_id)} from: #{inspect(_from)}  with state: #{inspect(state)}")
-    increment_hop_count()
+    #increment_hop_count()
     successor = state.successor
 
     ## # Logger.debug("Successor in find_successor #{inspect(successor)} state: #{inspect(state)}")
@@ -92,18 +92,6 @@ defmodule CP2P.Node do
 
     {:reply, successor_for_node_id, state}
   end
-
-  #  @impl true
-  #  def handle_call({:update_node_ids_in_state, other_node_ids}, _from, state) do
-  #    state = %{state | other_node_ids: other_node_ids}
-  #    {:reply, :ok, state}
-  #  end
-
-  #  ## search the local table for the highest predecessor of id
-  #  def handle_call({:closest_preceding_node, for_node_id}, _from, state) do
-  #    closest_preceding_node_info = find_closest_preceding_node_from_finger_table for_node_id, state
-  #    {:reply, closest_preceding_node_info, state}
-  #  end
 
   ### Join a Chord ring containing node `existing_node_info`
   def handle_cast({:join, existing_node_info}, state) do
@@ -165,12 +153,6 @@ defmodule CP2P.Node do
       rand_key_on_ring = :rand.uniform(trunc(:math.pow(2, state.m)))
       random_key_on_chord = get_random_id_on_chord(state.m, Integer.to_string(rand_key_on_ring))
 
-      # call_to_random_node_id = Enum.random(other_node_ids)
-      # Logger.debug("Call other node mapped to random id: #{inspect(random_key_on_chord)} from node: #{inspect(self())}")
-
-      # This causes deadlock.
-      # Moving to info
-      # :ok = GenServer.call(call_to_random_node_pid, :process_msg)
       send(self(), {:process_msg, random_key_on_chord})
 
       # Decrement counter for this node
@@ -215,6 +197,8 @@ defmodule CP2P.Node do
   ## called periodically. refreshes finger table entries.
   ## next stores the index of the next finger to fix.
   def handle_info(:fix_fingers, state) do
+    Logger.debug("Before :fix_fingers state #{inspect state}")
+
     successor = state.successor
 
     state =
@@ -248,8 +232,10 @@ defmodule CP2P.Node do
       end
 
     if state.req_left != 0 do
-      schedule_work(:fix_fingers, 2 * 1000)
+      schedule_work(:fix_fingers, 1 * 1)
     end
+
+    Logger.debug("After :fix_fingers state #{inspect state}")
 
     {:noreply, state}
   end
@@ -257,7 +243,7 @@ defmodule CP2P.Node do
   #
   ## called periodically. checks whether predecessor has failed.
   def handle_info(:check_predecessor, state) do
-    Logger.debug("check_predecessor Before state: #{inspect(state)}")
+    #Logger.debug("check_predecessor Before state: #{inspect(state)}")
     predecessor = state.predecessor
 
     state =
@@ -280,7 +266,7 @@ defmodule CP2P.Node do
       schedule_work(:check_predecessor, 2 * 1000)
     end
 
-    Logger.debug("check_predecessor After state: #{inspect(state)}")
+    #Logger.debug("check_predecessor After state: #{inspect(state)}")
     {:noreply, state}
   end
 
