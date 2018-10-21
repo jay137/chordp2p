@@ -9,7 +9,9 @@ defmodule CP2P.Master do
 
   @impl true
   def init(args) do
-    {:ok, %{}}
+    table = :ets.new(:ets_hop_count, [:public, :named_table])
+    Logger.debug("#{inspect __MODULE__} table: #{inspect table}")
+    {:ok, %{"hop_count_table": table}}
   end
 
   @impl true
@@ -38,16 +40,16 @@ defmodule CP2P.Master do
     Logger.debug("Master pid : #{inspect self()} Node id to pid map : #{inspect node_id_to_pid_map}")
 
     # Set other node pid list for each node
-    for node_id <- node_id_list do
-      [{_, node_info}] = Registry.lookup(CP2P.Registry.ProcReg, node_id)
-
-      other_node_id_to_pid_map = Map.delete(node_id_to_pid_map, node_id)
-      other_node_pid_list = List.flatten(Map.values(other_node_id_to_pid_map))
-      Logger.debug("Other node pid list: #{inspect(other_node_pid_list)} for node id: #{inspect(node_id)}")
-
-      # Set other node pid list
-      :ok = GenServer.call(node_info.node_pid, {:update_node_pids_in_state, other_node_pid_list})
-    end
+#    for node_id <- node_id_list do
+#      [{_, node_info}] = Registry.lookup(CP2P.Registry.ProcReg, node_id)
+#
+#      other_node_id_to_pid_map = Map.delete(node_id_to_pid_map, node_id)
+#      other_node_id_list = List.flatten(Map.keys(other_node_id_to_pid_map))
+#      Logger.debug("Other node id list: #{inspect(other_node_id_list)} for node id: #{inspect(node_id)}")
+#
+#      # Set other node pid list
+#      :ok = GenServer.call(node_info.node_pid, {:update_node_ids_in_state, other_node_id_list})
+#    end
 
     # Start messaging
     for node_id <- node_id_list do
@@ -60,7 +62,11 @@ defmodule CP2P.Master do
     wait_for_worker_nodes()
 
     # TODO: Return average number of hops for all nodes
-    avg_lookup_hops = 100
+
+    hop_count_table = Map.get(state, :hop_count_table)#:ets.whereis(:ets_hop_count)
+    Logger.debug("state : #{inspect state} table: #{inspect hop_count_table}")
+    [{_, total_hops}] = :ets.lookup(hop_count_table, :hop)
+    avg_lookup_hops = total_hops / num_nodes
     {:reply, avg_lookup_hops, state}
   end
 
@@ -95,6 +101,8 @@ defmodule CP2P.Master do
     #    end
 
     ##Logger.debug("***")
+
+    Logger.debug("#{inspect __MODULE__} Spawned node  #{inspect node_info}")
 
     if(i <= num_nodes) do
       if(i == 1) do
