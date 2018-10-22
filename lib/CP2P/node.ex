@@ -70,7 +70,12 @@ defmodule CP2P.Node do
   #
   ## ask node n to find the successor of id
   def handle_call({:find_successor, for_node_id}, _from, state) do
-    ## # Logger.debug("#{inspect(__MODULE__)} :find_successor for node: #{inspect(for_node_id)} from: #{inspect(_from)}  with state: #{inspect(state)}")
+    successor_for_node_id = find_successor(for_node_id, state)
+    {:reply, successor_for_node_id, state}
+  end
+
+  defp find_successor(for_node_id, state) do
+    Logger.debug("#{inspect(__MODULE__)} :find_successor for node: #{inspect(for_node_id)} with state: #{inspect(state)}")
     #increment_hop_count()
     successor = state.successor
 
@@ -78,7 +83,7 @@ defmodule CP2P.Node do
 
     successor_for_node_id =
       if map_size(successor) > 0 and
-           belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id) do
+         belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id) do
         successor
       else
         closest_prec_node_info = find_closest_preceding_node_from_finger_table(for_node_id, state)
@@ -89,13 +94,13 @@ defmodule CP2P.Node do
           GenServer.call(closest_prec_node_info.node_pid, {:find_successor, for_node_id})
         end
       end
-
-    {:reply, successor_for_node_id, state}
   end
 
   ### Join a Chord ring containing node `existing_node_info`
   def handle_cast({:join, existing_node_info}, state) do
-    ## # Logger.debug("#{inspect(__MODULE__)} Join existing_node_info: #{inspect(existing_node_info)}, state: #{inspect(state)}")
+    Logger.debug(
+      "#{inspect(__MODULE__)} Join existing_node_info: #{inspect(existing_node_info)}, state: #{inspect(state)}"
+    )
 
     predecessor = nil
     this_node_id = state.node_id
@@ -171,7 +176,7 @@ defmodule CP2P.Node do
     successor = state.successor
 
     state =
-      if successor != nil do
+      if successor != nil and successor.predecessor != nil do
         x = successor.predecessor
 
         successor =
@@ -179,13 +184,16 @@ defmodule CP2P.Node do
             x
           end
 
-        # successor.notify(n)
-        send(successor.node_pid, {:notify, state})
-
         %{state | successor: successor}
       else
         state
       end
+
+    # successor.notify(n)
+    if (state.successor != nil) do
+      send(state.successor.node_pid, {:notify, state})
+    end
+
 
     if state.req_left != 0 do
       schedule_work(:stabilize, 2 * 1000)
@@ -212,18 +220,24 @@ defmodule CP2P.Node do
         next =
           if next > m - 1 do
             0
+          else
+            next
           end
 
-        # find(successor(n + :math.pow(2, next - 1)))
-
-        # finger[next] = find(successor(n + :math.pow(2, next - 1)))
+        Logger.debug("fix fingers : #{inspect state} find successor node id - #{inspect next }")
         next_successor =
+          if(successor.node_pid == state.node_pid) do
+            find_successor(successor.node_pid, state)
+          else
           GenServer.call(
             successor.node_pid,
             {:find_successor, state.node_id + :math.pow(2, next - 1)}
           )
+          end
 
-        List.replace_at(finger, next, next_successor)
+
+
+        finger = List.replace_at(finger, next, next_successor)
 
         state = %{state | ft: finger}
         %{state | next: next}
@@ -232,7 +246,7 @@ defmodule CP2P.Node do
       end
 
     if state.req_left != 0 do
-      schedule_work(:fix_fingers, 1 * 1)
+      schedule_work(:fix_fingers, 1 * 100)
     end
 
     Logger.debug("After :fix_fingers state #{inspect state}")
