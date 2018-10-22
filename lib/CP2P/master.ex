@@ -53,6 +53,10 @@ defmodule CP2P.Master do
     #    end
 
     # Start messaging
+    Logger.debug("Before Sleep")
+    Process.sleep(10 * 1000)
+    Logger.debug("After Sleep")
+
     for node_id <- node_id_list do
       [{_, node_info}] = Registry.lookup(CP2P.Registry.ProcReg, node_id)
 
@@ -62,6 +66,8 @@ defmodule CP2P.Master do
     end
 
     wait_for_worker_nodes()
+
+    # TODO: Return average number of hops for all nodes
 
     # :ets.whereis(:ets_hop_count)
     hop_count_table = Map.get(state, :hop_count_table)

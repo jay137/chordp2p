@@ -180,6 +180,8 @@ defmodule CP2P.Node do
         successor =
           if belongs_to_range?(state.node_id, successor.node_id, x.node_id, state.m) do
             x
+          else
+            successor
           end
 
         %{state | successor: successor}
@@ -384,7 +386,6 @@ defmodule CP2P.Node do
           end
 
   end
-
 
   defp get_random_id_on_chord(m, val_to_be_hashed) do
     total_nodes = trunc(:math.pow(2, m))
