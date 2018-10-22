@@ -176,9 +176,7 @@ defmodule CP2P.Node do
   def handle_info(:stabilize, state) do
     successor = state.successor
 
-    Logger.debug(
-      "Succ.pred: #{inspect(successor.predecessor)} for successor: #{inspect(successor)}"
-    )
+    # Logger.debug("Succ.pred: #{inspect(successor.predecessor)} for successor: #{(successor)}")
 
     state =
       if successor != nil and successor.predecessor != nil do
@@ -196,6 +194,8 @@ defmodule CP2P.Node do
         successor =
           if belongs_to_range?(state.node_id, successor.node_id, x.node_id) do
             x
+          else
+            successor
           end
 
         %{state | successor: successor}
@@ -205,9 +205,7 @@ defmodule CP2P.Node do
 
     # successor.notify(n)
     if state.successor != nil do
-      Logger.debug(
-        "state successor: #{state.successor.node_id} for node: #{inspect(state.node_id)}"
-      )
+      # Logger.debug("state successor: #{state.successor.node_id} for node: (state.node_id)}")
 
       send(state.successor.node_pid, {:notify, state})
     end
@@ -322,6 +320,7 @@ defmodule CP2P.Node do
         predecessor
       end
 
+    # Logger.debug("Predecessor of node: #{inspect(this_node_id)} is #{inspect(predecessor)}")
     state = %{state | predecessor: predecessor}
 
     # Logger.debug("notify After state: #{inspect(state.predecessor.node_id)} for node id #{inspect(state.node_id)}")
@@ -389,10 +388,10 @@ defmodule CP2P.Node do
           end
 
         range2 < range1 ->
-          if num > range1 and num < range2 do
-            false
-          else
+          if num > range1 or num < range2 do
             true
+          else
+            false
           end
 
         true ->

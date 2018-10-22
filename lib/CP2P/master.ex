@@ -60,11 +60,7 @@ defmodule CP2P.Master do
     for node_id <- node_id_list do
       [{_, node_info}] = Registry.lookup(CP2P.Registry.ProcReg, node_id)
 
-      Logger.debug(
-        "Before send message #{inspect(node_info)} alive:#{
-          inspect(Process.alive?(node_info.node_pid))
-        }"
-      )
+      # Logger.debug("Before send message #{inspect(node_info)} alive:#{inspect(Process.alive?(node_info.node_pid))}")
 
       send(node_info.node_pid, :send_msg)
       # GenServer.cast(node_info.node_pid, :send_msg)
