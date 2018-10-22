@@ -63,13 +63,11 @@ defmodule CP2P.Master do
 
     wait_for_worker_nodes()
 
-    # TODO: Return average number of hops for all nodes
-
     # :ets.whereis(:ets_hop_count)
     hop_count_table = Map.get(state, :hop_count_table)
     #Logger.debug("state : #{inspect(state)} table: #{inspect(hop_count_table)}")
     [{_, total_hops}] = :ets.lookup(hop_count_table, :hop)
-    avg_lookup_hops = total_hops / num_nodes
+    avg_lookup_hops = total_hops / (num_nodes * num_req)
     {:reply, avg_lookup_hops, state}
   end
 

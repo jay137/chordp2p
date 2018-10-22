@@ -289,9 +289,9 @@ defmodule CP2P.Node do
     predecessor =
       if predecessor == nil or
            belongs_to_range?(
-             predecessor_node_info.node_id,
+             predecessor.node_id,
              this_node_id,
-             predecessor.node_id
+             predecessor_node_info.node_id
            ) do
         predecessor_node_info
       else
@@ -348,16 +348,44 @@ defmodule CP2P.Node do
     # # #Logger.debug("Message timer #{inspect job_atom_id} for self: #{inspect Process.read_timer(message_timer)}")
   end
 
-  defp belongs_to_range?(range1, range2, num) do
-    start_num = Kernel.min(range1, range2)
-    end_num = Kernel.max(range1, range2)
+  #  defp belongs_to_range?(range1, range2, num) do
+  #    start_num = Kernel.min(range1, range2)
+  #    end_num = Kernel.max(range1, range2)
+  #
+  #    if num > start_num and num < end_num do
+  #      true
+  #    else
+  #      false
+  #    end
+  #  end
 
-    if num > start_num and num < end_num do
-      true
-    else
-      false
-    end
+  defp belongs_to_range?(range1, range2, num) do
+    # start_num = Kernel.min(range1, range2)
+    # end_num = Kernel.max(range1, range2)
+
+    does_it_belong =
+      cond do
+        range1 < range2 ->
+          if num > range1 and num < range2 do
+            true
+          else
+            false
+          end
+
+        range2 < range1 ->
+          if num > range1 and num < range2 do
+            false
+          else
+            true
+          end
+
+        true ->
+          false
+      end
+
+    does_it_belong
   end
+
 
   defp get_random_id_on_chord(m, val_to_be_hashed) do
     total_nodes = trunc(:math.pow(2, m))
