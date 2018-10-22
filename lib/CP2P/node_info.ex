@@ -12,6 +12,5 @@ defmodule CP2P.Node_info do
             ft: [],
             req_left: 0,
             m: -1,
-            next: 0
-            #other_node_ids: nil
+            next: -1
 end
