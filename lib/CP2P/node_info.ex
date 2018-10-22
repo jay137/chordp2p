@@ -6,8 +6,8 @@ defmodule CP2P.Node_info do
   '''
 
   defstruct node_id: -1,
-            successor: nil,
-            predecessor: nil,
+            successor_id: nil,
+            predecessor_id: nil,
             node_pid: nil,
             ft: [],
             req_left: 0,

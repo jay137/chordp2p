@@ -24,33 +24,9 @@ defmodule CP2P.Master do
 
     node_id_list = Registry.keys(CP2P.Registry.ProcReg, self())
 
-    node_info_list =
-      Enum.map(
-        node_id_list,
-        fn node_id ->
-          [{_, node_info}] = Registry.lookup(CP2P.Registry.ProcReg, node_id)
-          node_info
-        end
-      )
-
-    # #Logger.debug("#{inspect(__MODULE__)} node info list: #{inspect(node_info_list)}")
-    # node_id_to_pid_map = Enum.group_by(node_info_list, & &1.node_id, & &1.node_pid)
-    node_id_to_pid_map =
-      Enum.group_by(node_info_list, &Map.get(&1, :node_id), &Map.get(&1, :node_pid))
-
-    #Logger.debug("Master pid : #{inspect(self())} Node id to pid map : #{inspect(node_id_to_pid_map)}")
-
-    # Set other node pid list for each node
-    #    for node_id <- node_id_list do
-    #      [{_, node_info}] = Registry.lookup(CP2P.Registry.ProcReg, node_id)
-    #
-    #      other_node_id_to_pid_map = Map.delete(node_id_to_pid_map, node_id)
-    #      other_node_id_list = List.flatten(Map.keys(other_node_id_to_pid_map))
-    #      #Logger.debug("Other node id list: #{inspect(other_node_id_list)} for node id: #{inspect(node_id)}")
-    #
-    #      # Set other node pid list
-    #      :ok = GenServer.call(node_info.node_pid, {:update_node_ids_in_state, other_node_id_list})
-    #    end
+    Logger.debug("Before sleep")
+    Process.sleep(10 * 1000)
+    Logger.debug("After sleep")
 
     # Start messaging
     for node_id <- node_id_list do
@@ -58,19 +34,11 @@ defmodule CP2P.Master do
 
       # #Logger.debug("Before send message #{inspect node_info} alive:#{inspect Process.alive?(node_info.node_pid)}")
       send(node_info.node_pid, :send_msg)
-      # GenServer.cast(node_info.node_pid, :send_msg)
     end
 
     wait_for_worker_nodes()
 
-    # TODO: Return average number of hops for all nodes
-
-    # :ets.whereis(:ets_hop_count)
-    hop_count_table = Map.get(state, :hop_count_table)
-    #Logger.debug("state : #{inspect(state)} table: #{inspect(hop_count_table)}")
-    [{_, total_hops}] = :ets.lookup(hop_count_table, :hop)
-    avg_lookup_hops = total_hops / num_nodes
-    {:reply, avg_lookup_hops, state}
+    {:reply, calc_avg_hops(state, num_nodes, num_req), state}
   end
 
   defp wait_for_worker_nodes() do
@@ -85,8 +53,9 @@ defmodule CP2P.Master do
   end
 
   defp spawn_nodes(i, num_nodes, first_node_info, num_req) do
-    # TODO: Calculate m based on num nodes
-    m = 10
+
+    m = trunc(:math.log2(3 * num_nodes))
+    #Logger.debug("#{inspect __MODULE__} M = #{inspect m}")
 
     {:ok, node_pid} =
       DynamicSupervisor.start_child(CP2P.NodeSupervisor, {CP2P.Node, [num_req, m]})
@@ -100,10 +69,10 @@ defmodule CP2P.Master do
     if(i == 1) do
       GenServer.call(node_info.node_pid, :create)
     else
-      GenServer.cast(node_info.node_pid, {:join, first_node_info})
+      successor_id = GenServer.call(first_node_info.node_pid, {:find_successor, node_info.node_id})
+      Logger.debug("#{inspect(__MODULE__)} successor for #{inspect node_info.node_id} is #{inspect successor_id}")
+      GenServer.call(node_info.node_pid, {:join, first_node_info})
     end
-
-    ## #Logger.debug("***")
 
     #Logger.debug("#{inspect(__MODULE__)} Spawned node  #{inspect(node_info)}")
 
@@ -117,6 +86,15 @@ defmodule CP2P.Master do
     if(i < num_nodes) do
       spawn_nodes(i + 1, num_nodes, first_node_info, num_req)
     end
+  end
+
+  defp calc_avg_hops(state, num_nodes, num_req) do
+    # :ets.whereis(:ets_hop_count)
+    hop_count_table = Map.get(state, :hop_count_table)
+    #Logger.debug("state : #{inspect(state)} table: #{inspect(hop_count_table)}")
+    [{_, total_hops}] = :ets.lookup(hop_count_table, :hop)
+    avg_lookup_hops = total_hops / (num_nodes * num_req)
+    avg_lookup_hops
   end
 
 end
