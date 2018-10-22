@@ -83,7 +83,7 @@ defmodule CP2P.Node do
 
     successor_for_node_id =
       if map_size(successor) > 0 and
-         belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id) do
+         belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id, state.m) do
         successor
       else
         closest_prec_node_info = find_closest_preceding_node_from_finger_table(for_node_id, state)
@@ -128,7 +128,7 @@ defmodule CP2P.Node do
     ## # #Logger.debug("Successor in find_successor #{inspect(successor)} state: #{inspect(state)}")
 
     if successor != nil and map_size(successor) > 0 and
-         belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id) do
+       belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id, state.m) do
       send(successor.node_pid, {:process_msg, successor.node_id})
     else
       closest_prec_node_info = find_closest_preceding_node_from_finger_table(for_node_id, state)
@@ -178,7 +178,7 @@ defmodule CP2P.Node do
         x = successor.predecessor
 
         successor =
-          if belongs_to_range?(state.node_id, successor.node_id, x.node_id) do
+          if belongs_to_range?(state.node_id, successor.node_id, x.node_id, state.m) do
             x
           end
 
@@ -225,7 +225,7 @@ defmodule CP2P.Node do
         Logger.debug("fix fingers : #{inspect state} find successor node id - #{inspect next }")
         next_successor =
           if(successor.node_pid == state.node_pid) do
-            find_successor(successor.node_pid, state)
+            find_successor(successor.node_id, state)
           else
           GenServer.call(
             successor.node_pid,
@@ -291,7 +291,8 @@ defmodule CP2P.Node do
            belongs_to_range?(
              predecessor.node_id,
              this_node_id,
-             predecessor_node_info.node_id
+             predecessor_node_info.node_id,
+             state.m
            ) do
         predecessor_node_info
       else
@@ -308,7 +309,7 @@ defmodule CP2P.Node do
     this_node_id = this_node_info.node_id
     m = this_node_info.m
 
-    finger_entry = check_finger_table(m, this_node_id, for_node_id, finger)
+    finger_entry = check_finger_table(m, this_node_id, for_node_id, finger, m)
 
     if finger_entry do
       finger_entry
@@ -317,16 +318,16 @@ defmodule CP2P.Node do
     end
   end
 
-  defp check_finger_table(0, _, _, _) do
+  defp check_finger_table(0, _, _, _, _) do
     nil
   end
 
-  defp check_finger_table(i, this_node_id, for_node_id, finger) do
+  defp check_finger_table(i, this_node_id, for_node_id, finger, m) do
     finger_entry =
-      if Enum.at(finger, i) != nil and belongs_to_range?(this_node_id, for_node_id, Enum.at(finger, i)) do
+      if Enum.at(finger, i) != nil and belongs_to_range?(this_node_id, for_node_id, Enum.at(finger, i).node_id, m) do
         Enum.at(finger, i)
       else
-        check_finger_table(i - 1, this_node_id, for_node_id, finger)
+        check_finger_table(i - 1, this_node_id, for_node_id, finger, m)
       end
   end
 
@@ -359,31 +360,29 @@ defmodule CP2P.Node do
   #    end
   #  end
 
-  defp belongs_to_range?(range1, range2, num) do
+  defp belongs_to_range?(range1, range2, num, m) do
     # start_num = Kernel.min(range1, range2)
     # end_num = Kernel.max(range1, range2)
 
-    does_it_belong =
-      cond do
-        range1 < range2 ->
-          if num > range1 and num < range2 do
-            true
-          else
-            false
-          end
+    Logger.debug("range1: #{inspect range1}, range2: #{inspect range2}, num: #{inspect num}, m: #{inspect m}")
 
-        range2 < range1 ->
-          if num > range1 and num < range2 do
-            false
-          else
-            true
-          end
-
-        true ->
-          false
+    [adjustment, range1] =
+      if range1 > range2 do
+        [rem(range1, trunc(:math.pow(2, m))), 0]
+      else
+        [0, range1]
       end
 
-    does_it_belong
+    Logger.debug("adjustment : #{inspect adjustment}, range1 : #{inspect range1}, range2 : #{inspect range2}")
+    num = num + adjustment
+    range2 = range2 + adjustment
+
+    if num > range1 and num < range2 do
+            true
+          else
+            false
+          end
+
   end
 
 
