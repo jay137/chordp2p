@@ -1,5 +1,4 @@
 defmodule CP2P.Node do
-
   require Logger
 
   use GenServer
@@ -75,15 +74,15 @@ defmodule CP2P.Node do
   end
 
   defp find_successor(for_node_id, state) do
-    #Logger.debug("#{inspect(__MODULE__)} :find_successor for node: #{inspect(for_node_id)} with state: #{inspect(state)}")
-    #increment_hop_count()
+    # Logger.debug("#{inspect(__MODULE__)} :find_successor for node: #{inspect(for_node_id)} with state: #{inspect(state)}")
+    # increment_hop_count()
     successor = state.successor
 
     ## # #Logger.debug("Successor in find_successor #{inspect(successor)} state: #{inspect(state)}")
 
     successor_for_node_id =
       if map_size(successor) > 0 and
-         belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id) do
+           belongs_to_range?(state.node_id, successor.node_id + 1, for_node_id) do
         successor
       else
         closest_prec_node_info = find_closest_preceding_node_from_finger_table(for_node_id, state)
@@ -98,7 +97,11 @@ defmodule CP2P.Node do
 
   ### Join a Chord ring containing node `existing_node_info`
   def handle_cast({:join, existing_node_info}, state) do
-    #Logger.debug("#{inspect(__MODULE__)} Join existing_node_info: #{inspect(existing_node_info)}, state: #{inspect(state)}")
+    Logger.debug(
+      "#{inspect(__MODULE__)} Join existing_node_info: #{inspect(existing_node_info)}, state: #{
+        inspect(state)
+      }"
+    )
 
     predecessor = nil
     this_node_id = state.node_id
@@ -173,9 +176,22 @@ defmodule CP2P.Node do
   def handle_info(:stabilize, state) do
     successor = state.successor
 
+    Logger.debug(
+      "Succ.pred: #{inspect(successor.predecessor)} for successor: #{inspect(successor)}"
+    )
+
     state =
       if successor != nil and successor.predecessor != nil do
         x = successor.predecessor
+
+        # if state.node_id == 35 do
+        #   Logger.debug("x(succ.pred): #{x.node_id}")
+        # end
+        Logger.debug(
+          "#{x.node_id} belongs to range1: #{inspect(state.node_id)}; range2: #{
+            inspect(successor.node_id)
+          }"
+        )
 
         successor =
           if belongs_to_range?(state.node_id, successor.node_id, x.node_id) do
@@ -188,10 +204,13 @@ defmodule CP2P.Node do
       end
 
     # successor.notify(n)
-    if (state.successor != nil) do
+    if state.successor != nil do
+      Logger.debug(
+        "state successor: #{state.successor.node_id} for node: #{inspect(state.node_id)}"
+      )
+
       send(state.successor.node_pid, {:notify, state})
     end
-
 
     if state.req_left != 0 do
       schedule_work(:stabilize, 2 * 1000)
@@ -203,7 +222,7 @@ defmodule CP2P.Node do
   ## called periodically. refreshes finger table entries.
   ## next stores the index of the next finger to fix.
   def handle_info(:fix_fingers, state) do
-    Logger.debug("Before :fix_fingers state #{inspect state}")
+    # Logger.debug("Before :fix_fingers state #{inspect(state.ft)} ; Self node id: #{inspect(state.node_id)}")
 
     successor = state.successor
 
@@ -222,15 +241,15 @@ defmodule CP2P.Node do
             next
           end
 
-        Logger.debug("fix fingers : #{inspect state} find successor node id - #{inspect next }")
+        # Logger.debug("fix fingers : #{inspect state} find successor node id - #{inspect next }")
         next_successor =
           if(successor.node_pid == state.node_pid) do
             find_successor(successor.node_pid, state)
           else
-          GenServer.call(
-            successor.node_pid,
-            {:find_successor, state.node_id + :math.pow(2, next - 1)}
-          )
+            GenServer.call(
+              successor.node_pid,
+              {:find_successor, state.node_id + :math.pow(2, next - 1)}
+            )
           end
 
         finger = List.replace_at(finger, next, next_successor)
@@ -245,7 +264,7 @@ defmodule CP2P.Node do
       schedule_work(:fix_fingers, 1 * 10)
     end
 
-    #Logger.debug("After :fix_fingers state #{inspect state}")
+    # Logger.debug("After: fix_fingers state #{inspect(state.ft)} ; Self node id: #{inspect(state.node_id)} ; Self successor: #{inspect(state.predecessor)}")
 
     {:noreply, state}
   end
@@ -253,7 +272,7 @@ defmodule CP2P.Node do
   #
   ## called periodically. checks whether predecessor has failed.
   def handle_info(:check_predecessor, state) do
-    ##Logger.debug("check_predecessor Before state: #{inspect(state)}")
+    ## Logger.debug("check_predecessor Before state: #{inspect(state)}")
     predecessor = state.predecessor
 
     state =
@@ -276,22 +295,27 @@ defmodule CP2P.Node do
       schedule_work(:check_predecessor, 2 * 1000)
     end
 
-    ##Logger.debug("check_predecessor After state: #{inspect(state)}")
+    ## Logger.debug("check_predecessor After state: #{inspect(state)}")
     {:noreply, state}
   end
 
   ## n0 thinks it might be our predecessor, so it notifies this node
   def handle_info({:notify, predecessor_node_info}, state) do
-    #Logger.debug("notify Before state: #{inspect(state)}")
+    # Logger.debug("notify Before state: #{inspect(state)} and #{state.node_id}")
     predecessor = state.predecessor
     this_node_id = state.node_id
 
+    # if this_node_id == 65 do
+    #   Logger.debug("Predecessor of #{inspect(this_node_id)} is #{inspect(predecessor)}")
+    #   Logger.debug("Predecessor node info: #{inspect(predecessor_node_info)}")
+    # end
+
     predecessor =
-      if predecessor == nil or
+      if predecessor == nil or predecessor.node_id == this_node_id or
            belongs_to_range?(
-             predecessor_node_info.node_id,
+             predecessor.node_id,
              this_node_id,
-             predecessor.node_id
+             predecessor_node_info.node_id
            ) do
         predecessor_node_info
       else
@@ -299,7 +323,9 @@ defmodule CP2P.Node do
       end
 
     state = %{state | predecessor: predecessor}
-    #Logger.debug("notify After state: #{inspect(state)}")
+
+    # Logger.debug("notify After state: #{inspect(state.predecessor.node_id)} for node id #{inspect(state.node_id)}")
+
     {:noreply, state}
   end
 
@@ -323,7 +349,8 @@ defmodule CP2P.Node do
 
   defp check_finger_table(i, this_node_id, for_node_id, finger) do
     finger_entry =
-      if Enum.at(finger, i) != nil and belongs_to_range?(this_node_id, for_node_id, Enum.at(finger, i)) do
+      if Enum.at(finger, i) != nil and
+           belongs_to_range?(this_node_id, for_node_id, Enum.at(finger, i)) do
         Enum.at(finger, i)
       else
         check_finger_table(i - 1, this_node_id, for_node_id, finger)
@@ -349,14 +376,30 @@ defmodule CP2P.Node do
   end
 
   defp belongs_to_range?(range1, range2, num) do
-    start_num = Kernel.min(range1, range2)
-    end_num = Kernel.max(range1, range2)
+    # start_num = Kernel.min(range1, range2)
+    # end_num = Kernel.max(range1, range2)
 
-    if num > start_num and num < end_num do
-      true
-    else
-      false
-    end
+    does_it_belong =
+      cond do
+        range1 < range2 ->
+          if num > range1 and num < range2 do
+            true
+          else
+            false
+          end
+
+        range2 < range1 ->
+          if num > range1 and num < range2 do
+            false
+          else
+            true
+          end
+
+        true ->
+          false
+      end
+
+    does_it_belong
   end
 
   defp get_random_id_on_chord(m, val_to_be_hashed) do
@@ -373,7 +416,8 @@ defmodule CP2P.Node do
   end
 
   defp increment_hop_count() do
-    # # #Logger.debug("Inside increment hop count")
+    # Logger.debug("Inside increment hop count")
+
     hop_count_table = :ets.whereis(:ets_hop_count)
     :ets.update_counter(hop_count_table, :hop, 1, {1, 0})
   end
